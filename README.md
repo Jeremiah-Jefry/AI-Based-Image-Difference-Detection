@@ -12,7 +12,7 @@ An advanced, AI-powered image comparison tool designed for architectural drawing
   - **Structural Heatmap**: A continuous SSIM-based jet map showing the exact intensity of structural variations.
   - **Slider Tab**: A seamless drag-to-compare interactive slider.
 - **AI-Powered Reporting**: Uses blazing-fast cloud inference via the **Groq API** to generate a comprehensive, actionable executive summary, severity assessment, and field recommendations.
-- **LPIPS Perceptual Distance**: Optional deep-learning feature distance for strict visual matching.
+
 
 ##  Installation
 
@@ -21,7 +21,6 @@ An advanced, AI-powered image comparison tool designed for architectural drawing
    ```bash
    pip install -r requirements.txt
    ```
-   *(Note: `lpips` and `torch` can be installed manually for perceptual distance features).*
 
 ##  Configuration
 

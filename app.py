@@ -18,7 +18,6 @@ from utils.llm_report import (
     generate_llm_report_stream,
     groq_available,
 )
-from utils.lpips_diff import lpips_available
 from utils.summary import build_summary
 
 # Load .env file for GROQ_API_KEY
@@ -310,13 +309,6 @@ with st.sidebar:
 
     dpi = st.slider("Rasterization DPI", min_value=100, max_value=300, value=200, step=25)
 
-    enable_lpips = st.checkbox(
-        "Enable LPIPS",
-        value=False,
-        disabled=not lpips_available(),
-        help="Optional deep-feature perceptual distance (requires lpips + PyTorch).",
-    )
-
     st.markdown("---")
     st.markdown("### 🤖 AI Report (Groq)")
 
@@ -370,7 +362,6 @@ with st.spinner("🔄 Running alignment and structural diff analysis..."):
         results = run_diff_engine(
             before_file, after_file,
             dpi=dpi,
-            enable_lpips=enable_lpips,
             llm_model=llm_model,
         )
     except Exception as exc:
@@ -553,12 +544,4 @@ if stats["regions"]:
 else:
     st.info("No surviving regions after filtering.")
 
-# ========================================================================
-# LPIPS (optional)
-# ========================================================================
-if results.get("lpips") is not None:
-    st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
-    _step_header(6, "LPIPS Perceptual Distance")
-    st.write(results["lpips"]["message"])
-    if results["lpips"]["value"] is not None:
-        st.metric("LPIPS Distance", f"{results['lpips']['value']:.4f}")
+

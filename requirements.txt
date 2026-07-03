@@ -7,5 +7,4 @@ Pillow
 streamlit-image-comparison
 groq
 python-dotenv
-# Optional (pulls in PyTorch ~2GB):
-# lpips
+

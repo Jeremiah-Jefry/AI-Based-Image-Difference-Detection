@@ -4,7 +4,6 @@ from typing import Any
 
 from utils.align import align_images
 from utils.diff import analyze_differences
-from utils.lpips_diff import compute_lpips_distance, lpips_available
 from utils.pdf_utils import load_document_image
 from utils.summary import build_summary
 
@@ -14,7 +13,6 @@ def run_diff_engine(
     after_source: Any,
     *,
     dpi: int = 200,
-    enable_lpips: bool = False,
     llm_model: str = "gemma3",
 ) -> dict[str, Any]:
     before_image = load_document_image(before_source, dpi=dpi)
@@ -29,7 +27,6 @@ def run_diff_engine(
             "diff": None,
             "stats": None,
             "summary": alignment["message"],
-            "lpips": None,
             "llm_model": llm_model,
         }
 
@@ -44,10 +41,6 @@ def run_diff_engine(
     }
     summary = build_summary(stats)
 
-    lpips_result = None
-    if enable_lpips and lpips_available():
-        lpips_result = compute_lpips_distance(alignment["warped_image"], after_image)
-
     return {
         "before_image": before_image,
         "after_image": after_image,
@@ -55,7 +48,6 @@ def run_diff_engine(
         "diff": diff,
         "stats": stats,
         "summary": summary,
-        "lpips": lpips_result,
         "llm_model": llm_model,
         "ssim_map": diff.get("ssim_map"),
         "ssim_score": diff.get("ssim_score"),
