@@ -2,7 +2,7 @@
 
 An advanced, AI-powered image comparison tool designed for architectural drawings, CAD exports, and engineering diagrams. This application automatically aligns, compares, and highlights structural differences between two versions of a document, generating a rich, user-friendly AI report to summarize the findings.
 
-## 🚀 Features
+##  Features
 
 - **Multi-Format Support**: Upload PDF, PNG, JPG, JPEG, TIFF, BMP, or WebP files.
 - **Smart Alignment**: Uses ORB feature detection and RANSAC homography to automatically align drawings that might have been shifted, rotated, or scaled.
@@ -14,7 +14,7 @@ An advanced, AI-powered image comparison tool designed for architectural drawing
 - **AI-Powered Reporting**: Uses blazing-fast cloud inference via the **Groq API** to generate a comprehensive, actionable executive summary, severity assessment, and field recommendations.
 - **LPIPS Perceptual Distance**: Optional deep-learning feature distance for strict visual matching.
 
-## ⚙️ Installation
+##  Installation
 
 1. Clone this repository.
 2. Install the local dependencies:
@@ -23,7 +23,7 @@ An advanced, AI-powered image comparison tool designed for architectural drawing
    ```
    *(Note: `lpips` and `torch` can be installed manually for perceptual distance features).*
 
-## 🔑 Configuration
+##  Configuration
 
 To enable the AI Analysis Report, you need a free Groq API key:
 
@@ -34,7 +34,7 @@ To enable the AI Analysis Report, you need a free Groq API key:
    GROQ_API_KEY=gsk_your_api_key_here
    ```
 
-## 🏃‍♂️ Usage
+##  Usage
 
 Launch the Streamlit app:
 
@@ -47,7 +47,7 @@ The app will start on `http://localhost:8501`.
 2. Ensure the Groq status indicator shows **✅ Groq API configured**.
 3. Click **Run Comparison** and explore the 5-step analysis report.
 
-## 🏗️ Architecture
+##  Architecture
 
 - **Alignment**: `utils/align.py` (ORB + Homography)
 - **Diffing**: `utils/diff.py` (Canny edge-domain + connected components)
