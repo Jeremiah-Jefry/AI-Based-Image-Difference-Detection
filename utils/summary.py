@@ -75,3 +75,27 @@ def build_summary(stats: dict[str, Any]) -> str:
         f"The change balance is {balance}. "
         "The sheets remain related, but the differences are no longer minor."
     )
+
+
+def build_llm_context(stats: dict[str, Any]) -> dict[str, Any]:
+    """Format the stats into a clean payload suitable for LLM prompting."""
+    regions = list(stats.get("regions", []))
+    return {
+        "region_count": int(stats.get("region_count", 0)),
+        "changed_area_pct": float(stats.get("changed_area_pct", 0.0)),
+        "total_changed_area": int(stats.get("total_changed_area", 0)),
+        "sheet_area": int(stats.get("sheet_area", 0)),
+        "label_counts": dict(stats.get("label_counts", {})),
+        "regions": [
+            {
+                "quadrant": r.get("quadrant", "unknown"),
+                "label": r.get("label", "unknown"),
+                "area": r.get("area", 0),
+                "bbox_area": r.get("bbox_area", 0),
+                "ssim_mean": r.get("ssim_mean", 1.0),
+                "added_pixels": r.get("added_pixels", 0),
+                "removed_pixels": r.get("removed_pixels", 0),
+            }
+            for r in regions
+        ],
+    }

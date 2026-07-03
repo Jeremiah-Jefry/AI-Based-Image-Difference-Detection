@@ -5,4 +5,7 @@ scikit-image
 numpy
 Pillow
 streamlit-image-comparison
-lpips
+groq
+python-dotenv
+# Optional (pulls in PyTorch ~2GB):
+# lpips

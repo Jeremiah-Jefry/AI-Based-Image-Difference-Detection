@@ -52,10 +52,12 @@ confirmed results:
    `removed` (in A, not B) by checking presence in each aligned edge map.
 6. **Stats** — region count, total changed area, % of total sheet area,
    bounding box coordinates, rough quadrant (e.g. "upper-left").
-7. **Summary (FR-6)** — generate the natural-language paragraph from the
-   computed stats using plain Python string templates. **No LLM API call.**
-   This is a hard constraint, not a placeholder — it must work fully
-   offline with zero external calls.
+7. **Summary (FR-6)** — generate a rich, structured natural-language report
+   using a local Ollama LLM (e.g. llama3.1). The report includes an executive
+   summary, detailed per-region findings, severity assessment, heatmap
+   interpretation, and recommendations. Falls back to deterministic Python
+   string templates when Ollama is unavailable. **No cloud LLM API calls** —
+   Ollama runs entirely locally.
 8. **Visualization** — side-by-side view, overlay with color-coded boxes
    (red = removed, green = added), a diff heatmap, and a draggable
    before/after slider via `streamlit-image-comparison`.

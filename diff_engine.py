@@ -15,6 +15,7 @@ def run_diff_engine(
     *,
     dpi: int = 200,
     enable_lpips: bool = False,
+    llm_model: str = "gemma3",
 ) -> dict[str, Any]:
     before_image = load_document_image(before_source, dpi=dpi)
     after_image = load_document_image(after_source, dpi=dpi)
@@ -29,6 +30,7 @@ def run_diff_engine(
             "stats": None,
             "summary": alignment["message"],
             "lpips": None,
+            "llm_model": llm_model,
         }
 
     diff = analyze_differences(alignment["warped_image"], after_image)
@@ -54,4 +56,7 @@ def run_diff_engine(
         "stats": stats,
         "summary": summary,
         "lpips": lpips_result,
+        "llm_model": llm_model,
+        "ssim_map": diff.get("ssim_map"),
+        "ssim_score": diff.get("ssim_score"),
     }
