@@ -1,0 +1,8 @@
+streamlit
+PyMuPDF
+opencv-python
+scikit-image
+numpy
+Pillow
+streamlit-image-comparison
+lpips
