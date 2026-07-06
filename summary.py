@@ -25,55 +25,51 @@ def _format_quadrants(regions: list[dict[str, Any]]) -> str:
 def _describe_change_balance(added_count: int, removed_count: int) -> str:
     parts: list[str] = []
     if added_count:
-        parts.append(f"{added_count} added {_pluralize(added_count, 'region')}")
+        parts.append(f"{added_count} new {_pluralize(added_count, 'element')}")
     if removed_count:
-        parts.append(f"{removed_count} removed {_pluralize(removed_count, 'region')}")
+        parts.append(f"{removed_count} removed {_pluralize(removed_count, 'element')}")
     if not parts:
-        return "no surviving change regions"
+        return "no confirmed changes"
     if len(parts) == 1:
         return parts[0]
     return f"{parts[0]} and {parts[1]}"
 
 
 def build_summary(stats: dict[str, Any]) -> str:
-    region_count = int(stats.get("region_count", 0))
+    regions = [r for r in stats.get("regions", []) if not r.get("is_noise", False)]
+    region_count = len(regions)
     changed_area_pct = float(stats.get("changed_area_pct", 0.0))
-    regions = list(stats.get("regions", []))
-    labels = Counter(region.get("label", "unknown") for region in regions)
-    added_count = labels.get("added", 0)
-    removed_count = labels.get("removed", 0)
+    labels = Counter(region.get("change_type", "unknown") for region in regions)
+    added_count = labels.get("Added", 0)
+    removed_count = labels.get("Removed", 0)
     quadrants = _format_quadrants(regions)
 
     if region_count == 0 or changed_area_pct < 0.05:
-        return (
-            "No significant structural differences were detected after alignment. "
-            "The two sheets appear largely identical, with only negligible edge noise."
-        )
+        return "No revisions detected between the two drawing versions."
 
     if region_count <= 3 and changed_area_pct < 0.5:
         balance = _describe_change_balance(added_count, removed_count)
         return (
-            f"A few minor structural differences were detected across {region_count} "
-            f"{_pluralize(region_count, 'region')}, concentrated in {quadrants}. "
-            f"The surviving changes are mainly {balance}. "
-            "Overall, the drawings remain structurally very similar."
+            f"Minor revisions detected. A few changes were found across {region_count} "
+            f"{_pluralize(region_count, 'item')}, concentrated in {quadrants}. "
+            f"The confirmed changes are mainly {balance}. "
+            "Overall, the drawing match quality remains very high."
         )
 
     if region_count <= 15 and changed_area_pct < 1.5:
         balance = _describe_change_balance(added_count, removed_count)
         return (
-            f"{region_count} localized change {_pluralize(region_count, 'region')} were detected, "
+            f"Significant revisions detected. {region_count} localized {_pluralize(region_count, 'change')} were found, "
             f"covering about {changed_area_pct:.2f}% of the sheet area and clustering in {quadrants}. "
             f"The balance of changes is {balance}. "
-            "The sheets are still largely structurally aligned."
+            "The drawing match quality is still sufficient to compare versions."
         )
 
     balance = _describe_change_balance(added_count, removed_count)
     return (
-        f"The comparison found {region_count} change {_pluralize(region_count, 'region')} across about {changed_area_pct:.2f}% "
+        f"Significant revisions detected. The comparison found {region_count} {_pluralize(region_count, 'change')} across about {changed_area_pct:.2f}% "
         f"of the sheet area, with activity concentrated in {quadrants}. "
-        f"The change balance is {balance}. "
-        "The sheets remain related, but the differences are no longer minor."
+        f"The change balance is {balance}."
     )
 
 

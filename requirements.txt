@@ -5,6 +5,6 @@ scikit-image
 numpy
 Pillow
 streamlit-image-comparison
-groq
 python-dotenv
 
+ollama
