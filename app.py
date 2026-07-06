@@ -12,13 +12,7 @@ from PIL import Image
 from streamlit_image_comparison import image_comparison
 
 from diff_engine import run_diff_engine
-from utils.llm_report import (
-    GROQ_MODELS,
-    DEFAULT_MODEL,
-    generate_llm_report_stream,
-    groq_available,
-)
-from utils.summary import build_summary
+from summary import build_summary
 
 # Load .env file for GROQ_API_KEY
 load_dotenv()
@@ -189,52 +183,33 @@ def _pil_from_bgr(image_bgr: np.ndarray) -> Image.Image:
 
 
 def _overlay_regions(image_bgr: np.ndarray, regions: list[dict[str, object]]) -> np.ndarray:
-    """Draw bounding boxes with semi-transparent fills and clean labels."""
     overlay = image_bgr.copy()
-    fill_layer = image_bgr.copy()
 
-    for region in regions:
+    real_changes = [r for r in regions if not r.get("is_noise", False)]
+
+    for i, region in enumerate(real_changes, 1):
         x1, y1, x2, y2 = region["bbox_xyxy"]
-        label = region["label"]
+        label = region.get("change_type", "modified").lower()
 
-        # Colors: red for removed, green for added (BGR)
-        if label == "added":
-            box_color = (0, 200, 0)
-            fill_color = (0, 180, 0)
+        # Determine color
+        if "added" in label or "new" in label:
+            bg_color = (0, 200, 0)
+        elif "removed" in label:
+            bg_color = (0, 0, 220)
         else:
-            box_color = (0, 0, 220)
-            fill_color = (0, 0, 200)
+            bg_color = (200, 150, 0) # Modified/Resized
 
-        # Semi-transparent fill
-        cv2.rectangle(fill_layer, (int(x1), int(y1)), (int(x2), int(y2)), fill_color, -1)
+        cx = int((x1 + x2) / 2)
+        cy = int((y1 + y2) / 2)
 
-        # Solid border
-        cv2.rectangle(overlay, (int(x1), int(y1)), (int(x2), int(y2)), box_color, 3)
+        cv2.circle(overlay, (cx, cy), 18, bg_color, -1)
+        cv2.circle(overlay, (cx, cy), 18, (255,255,255), 2)
 
-        # Label with background rectangle for readability
-        caption = f"{label.upper()} | {region['quadrant']}"
+        text = str(i)
         font = cv2.FONT_HERSHEY_SIMPLEX
-        font_scale = 0.5
-        thickness = 1
-        (text_w, text_h), baseline = cv2.getTextSize(caption, font, font_scale, thickness)
-        text_x = int(x1)
-        text_y = max(text_h + 8, int(y1) - 8)
+        (tw, th), _ = cv2.getTextSize(text, font, 0.6, 2)
+        cv2.putText(overlay, text, (cx - int(tw/2), cy + int(th/2)), font, 0.6, (255,255,255), 2, cv2.LINE_AA)
 
-        # Background rectangle for text
-        cv2.rectangle(
-            overlay,
-            (text_x, text_y - text_h - 6),
-            (text_x + text_w + 8, text_y + 4),
-            box_color, -1,
-        )
-        cv2.putText(
-            overlay, caption,
-            (text_x + 4, text_y - 2),
-            font, font_scale, (255, 255, 255), thickness, cv2.LINE_AA,
-        )
-
-    # Blend the fill layer at 20% opacity
-    overlay = cv2.addWeighted(fill_layer, 0.15, overlay, 0.85, 0)
     return overlay
 
 
@@ -310,20 +285,7 @@ with st.sidebar:
     dpi = st.slider("Rasterization DPI", min_value=100, max_value=300, value=200, step=25)
 
     st.markdown("---")
-    st.markdown("### 🤖 AI Report (Groq)")
 
-    llm_model = st.selectbox(
-        "Model",
-        options=GROQ_MODELS,
-        index=0,
-        help="Select the Groq model for report generation.",
-    )
-
-    _groq_ok = groq_available()
-    if _groq_ok:
-        st.success("✅ Groq API configured", icon="🟢")
-    else:
-        st.warning("Groq API key not set — template fallback will be used.", icon="⚠️")
 
     st.markdown("---")
     run_requested = st.button("🚀 Run Comparison", type="primary", use_container_width=True)
@@ -342,7 +304,7 @@ if not run_requested:
         st.caption("Upload before & after PDF or image files of your architectural drawings.")
     with col2:
         st.markdown("#### 🔬 Analyze")
-        st.caption("ORB alignment, Canny edge diffing, SSIM scoring, and region extraction.")
+        st.caption("Analyze drawing differences.")
     with col3:
         st.markdown("#### 📊 Report")
         st.caption("AI-generated report with findings, severity assessment, and recommendations.")
@@ -361,76 +323,131 @@ with st.spinner("🔄 Running alignment and structural diff analysis..."):
     try:
         results = run_diff_engine(
             before_file, after_file,
-            dpi=dpi,
-            llm_model=llm_model,
+            dpi=dpi
         )
     except Exception as exc:
         st.error(f"❌ Processing failed: {exc}")
         st.stop()
 
-alignment = results["alignment"]
-diff = results["diff"]
-stats = results["stats"]
-summary = results["summary"]
-ssim_map = results.get("ssim_map")
 
-# ========================================================================
-# STEP 1: Alignment
-# ========================================================================
-_step_header(1, "Alignment Result")
+if 'results' in locals():
+    alignment = results["alignment"]
+    diff = results["diff"]
+    stats = results["stats"]
+    summary = results["summary"]
+    ssim_map = results.get("ssim_map")
 
-a_col1, a_col2, a_col3 = st.columns(3)
-with a_col1:
-    st.metric("ORB/RANSAC Inliers", alignment["inlier_count"])
-with a_col2:
-    st.metric("Keypoints (Before)", alignment["keypoints_before"])
-with a_col3:
-    st.metric("Keypoints (After)", alignment["keypoints_after"])
+    # ========================================================================
+    # STEP 1: Alignment
+    # ========================================================================
+    _step_header(1, "Alignment Result")
 
-if not alignment["success"]:
-    st.warning(f"⚠️ {alignment['message']}")
-    st.stop()
-else:
-    st.success(f"✅ {alignment['message']}")
+    a_col1, a_col2, a_col3 = st.columns(3)
+    with a_col1:
+        st.metric("ORB/RANSAC Inliers", alignment["inlier_count"])
+    with a_col2:
+        st.metric("Keypoints (Before)", alignment["keypoints_before"])
+    with a_col3:
+        st.metric("Keypoints (After)", alignment["keypoints_after"])
 
-if diff is None or stats is None:
-    st.stop()
+    if not alignment["success"]:
+        st.warning(f"⚠️ {alignment['message']}")
+        st.stop()
+    else:
+        st.success(f"✅ {alignment['message']}")
 
-aligned_before = alignment["warped_image"]
-after_image = results["after_image"]
+    if diff is None or stats is None:
+        st.stop()
 
-st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
+    aligned_before = alignment["warped_image"]
+    after_image = results["after_image"]
 
-# ========================================================================
-# STEP 2: Visual Comparison
-# ========================================================================
-_step_header(2, "Visual Comparison")
+    real_changes = [r for r in stats["regions"] if not r.get("is_noise", False)]
+    noise_changes = [r for r in stats["regions"] if r.get("is_noise", False)]
 
-overlay = _overlay_regions(aligned_before, diff["regions"])
+    # Verdict Banner
+    st.markdown("---")
+    st.markdown(f"### Cover Summary")
+    st.markdown(f"**Verdict:** {summary}")
 
-tab_side, tab_overlay, tab_slider = st.tabs(["📐 Side by Side", "🎯 Change Overlay", "↔️ Slider"])
+    if not real_changes:
+        st.success("✅ No revisions detected between the two drawing versions.")
+    else:
+        # 2. Revision schedule
+        st.markdown("### Revision Schedule")
+        schedule_data = []
 
-with tab_side:
-    left, right = st.columns(2)
-    with left:
-        st.markdown("**Before (aligned)**")
-        st.image(_pil_from_bgr(aligned_before), use_container_width=True)
-    with right:
-        st.markdown("**After**")
-        st.image(_pil_from_bgr(after_image), use_container_width=True)
+        from genai_caption import generate_caption
 
-with tab_overlay:
-    # Legend
-    st.markdown(
-        '<div class="legend-container">'
-        '<div class="legend-item"><div class="legend-dot removed"></div> Removed</div>'
-        '<div class="legend-item"><div class="legend-dot added"></div> Added</div>'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-    st.image(_pil_from_bgr(overlay), use_container_width=True)
+        for i, region in enumerate(real_changes, 1):
+            desc = generate_caption(aligned_before, after_image, region["bbox_xyxy"])
 
-with tab_slider:
+            type_mapping = {
+                "Added": "New element",
+                "Removed": "Removed element",
+                "Modified": "Revised element",
+                "Resized": "Element resized"
+            }
+
+            ui_type = type_mapping.get(region.get("change_type", ""), region.get("change_type", "Unknown"))
+
+            if not desc:
+                desc = f"{ui_type} ({region.get('shape_descriptor', 'element')}) identified."
+
+            schedule_data.append({
+                "Item #": i,
+                "Location": region["quadrant"],
+                "Change Type": ui_type,
+                "Description": desc,
+                "Approx. Size": f"{region['area']} px"
+            })
+
+        st.table(schedule_data)
+
+        # 3. Annotated drawings
+        st.markdown("### Annotated Drawing")
+        overlay = _overlay_regions(aligned_before, stats["regions"])
+        st.image(_pil_from_bgr(overlay), use_container_width=True)
+
+        # 4. Per-item detail cards
+        st.markdown("### Detailed Callouts")
+        for i, region in enumerate(real_changes, 1):
+            with st.container():
+                st.markdown(f"**Item #{i}: {region['quadrant']}**")
+
+                type_mapping = {
+                    "Added": "New element",
+                    "Removed": "Removed element",
+                    "Modified": "Revised element",
+                    "Resized": "Element resized"
+                }
+                ui_type = type_mapping.get(region.get("change_type", ""), region.get("change_type", "Unknown"))
+
+                st.markdown(f"*{ui_type} | {region['area']} px*")
+
+                desc = generate_caption(aligned_before, after_image, region["bbox_xyxy"])
+                if desc:
+                    st.write(desc)
+                else:
+                    st.write(f"A {region.get('shape_descriptor', 'element')} was {ui_type.lower()}.")
+
+                # Crops
+                x1, y1, x2, y2 = region["bbox_xyxy"]
+
+                pad = 20
+                h, w = aligned_before.shape[:2]
+                cx1, cy1 = max(0, x1-pad), max(0, y1-pad)
+                cx2, cy2 = min(w, x2+pad), min(h, y2+pad)
+
+                c1, c2 = st.columns(2)
+                with c1:
+                    st.image(_pil_from_bgr(aligned_before[cy1:cy2, cx1:cx2]), caption="Before")
+                with c2:
+                    st.image(_pil_from_bgr(after_image[cy1:cy2, cx1:cx2]), caption="After")
+                st.markdown("---")
+
+    # Slider
+    st.markdown("### Full-sheet comparison")
     aligned_before_path = _write_temp_image(aligned_before, "aligned_before_slider.png")
     after_path = _write_temp_image(after_image, "after_slider.png")
     image_comparison(
@@ -442,106 +459,15 @@ with tab_slider:
         in_memory=False,
     )
 
-st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
+    # 5. Technical appendix
+    with st.expander("Technical appendix"):
+        st.markdown("### Match Quality & Details")
+        st.write(f"**Alignment Inliers:** {alignment['inlier_count']} / {alignment['match_count']}")
 
-# ========================================================================
-# STEP 3: Heatmap Analysis
-# ========================================================================
-_step_header(3, "Heatmap Analysis")
+        if noise_changes:
+            st.write(f"**Noise / Scan Variations:** {len(noise_changes)} regions filtered out.")
 
-if ssim_map is not None:
-    heatmap = _heatmap_from_ssim(ssim_map, after_image)
-    st.caption("Smooth SSIM-based heatmap — brighter/warmer colors indicate greater structural difference.")
-else:
-    heatmap = _heatmap_fallback(diff["diff_mask"], after_image)
-    st.caption("Edge-based difference heatmap.")
+        st.markdown("**Parameters:** ORB alignment + RANSAC. Canny edge-domain structural differencing.")
 
-h_col1, h_col2 = st.columns([2, 1])
-with h_col1:
-    st.image(_pil_from_bgr(heatmap), use_container_width=True)
-with h_col2:
-    severity = _severity_from_stats(stats)
-    severity_labels = {
-        "none": ("None", "severity-none", "No meaningful changes detected."),
-        "minor": ("Minor", "severity-minor", "Small, localized changes."),
-        "moderate": ("Moderate", "severity-moderate", "Notable changes warrant review."),
-        "major": ("Major", "severity-major", "Extensive modifications detected."),
-    }
-    sev_label, sev_class, sev_desc = severity_labels[severity]
-    st.markdown(f'**Severity**: <span class="severity-badge {sev_class}">{sev_label}</span>', unsafe_allow_html=True)
-    st.markdown(f"*{sev_desc}*")
-    st.metric("Changed Area", f"{stats['changed_area_pct']:.2f}%")
-    st.metric("Change Regions", stats["region_count"])
-    if stats.get("label_counts"):
-        added = stats["label_counts"].get("added", 0)
-        removed = stats["label_counts"].get("removed", 0)
-        st.metric("Added Regions", added)
-        st.metric("Removed Regions", removed)
-    if results.get("ssim_score") is not None:
-        st.metric("Global SSIM", f"{results['ssim_score']:.4f}")
-
-st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
-
-# ========================================================================
-# STEP 4: AI Analysis Report
-# ========================================================================
-_step_header(4, "AI Analysis Report")
-
-_groq_ok = groq_available()
-
-if _groq_ok:
-    st.markdown(f"*Generating report with **{llm_model}** via Groq...*")
-    report_placeholder = st.empty()
-    report_chunks: list[str] = []
-
-    try:
-        for chunk in generate_llm_report_stream(stats, model=llm_model):
-            report_chunks.append(chunk)
-            report_placeholder.markdown("".join(report_chunks))
-
-        # Check if the stream returned a fallback message
-        full_report = "".join(report_chunks)
-        if full_report.startswith("> ⚠️"):
-            # Fallback was triggered — show template summary too
-            st.markdown("---")
-            st.markdown("**Template Summary (fallback):**")
-            st.markdown(summary)
-    except Exception as exc:
-        st.warning(f"LLM report generation failed: {exc}")
-        st.markdown("**Template Summary (fallback):**")
-        st.markdown(summary)
-else:
-    st.info(
-        "🤖 **Groq API key not configured** — showing template-based summary. "
-        "Get a free key at [console.groq.com](https://console.groq.com) and enter it in the sidebar."
-    )
-    st.markdown(
-        f'<div class="report-container">{summary}</div>',
-        unsafe_allow_html=True,
-    )
-
-st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
-
-# ========================================================================
-# STEP 5: Detailed Region Data
-# ========================================================================
-_step_header(5, "Detailed Region Data")
-
-if stats["regions"]:
-    # Clean up the data for display
-    display_regions = []
-    for i, region in enumerate(stats["regions"], 1):
-        display_regions.append({
-            "#": i,
-            "Type": region["label"].upper(),
-            "Quadrant": region["quadrant"],
-            "Area (px)": region["area"],
-            "SSIM": f"{region['ssim_mean']:.4f}",
-            "Added px": region["added_pixels"],
-            "Removed px": region["removed_pixels"],
-        })
-    st.dataframe(display_regions, use_container_width=True, hide_index=True)
-else:
-    st.info("No surviving regions after filtering.")
-
-
+    # 6. Limitation note
+    st.caption("This report identifies and measures visual differences between drawing versions. It does not verify code compliance, structural adequacy, or dimensional accuracy against design intent — items should be confirmed against the drawing set by a qualified reviewer.")
